@@ -1,7 +1,7 @@
 # Anubis POW Solver
 ![joke](./docs/not_so_happy.png)
 
-Solves proof-of work-challenges served by [TecharoHQ/anubis](https://github.com/TecharoHQ/anubis) (https://anubis.techaro.lol/).
+Solves proof-of-work challenges served by [TecharoHQ/anubis](https://github.com/TecharoHQ/anubis) (https://anubis.techaro.lol/).
 
 ## Screenshot
 
