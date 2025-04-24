@@ -83,7 +83,7 @@ func (s *Solver) buildHeaders() http.Header {
 	}
 }
 
-func (s *Solver) Solve() error {
+func (s *Solver) Solve(native bool) error {
 	req, err := http.NewRequest(http.MethodGet, s.URL, nil)
 	if err != nil {
 		return err
@@ -119,53 +119,78 @@ func (s *Solver) Solve() error {
 		return err
 	}
 
-	pensive, exists := doc.Find("#image").Attr("src")
-	if !exists {
-		return errors.New("pensive image not found")
-	}
-	log.Debug().Str("pensive", pensive).Msg("found pensive image")
+	var submissionUrl string
+	if native {
+		log.Info().Msg("solving challenge natively...")
+		start := time.Now()
+		result, err := SolveChallengeNative(challenge, func(i int64) {
+			log.Debug().Int64("i", i).Msg("challenge progress")
+		})
+		if err != nil {
+			return fmt.Errorf("failed to solve challenge: %w", err)
+		}
+		end := time.Now()
+		elapsed := end.Sub(start)
+		log.Info().Str("hash", result.Hash).Int64("nonce", result.Nonce).Msg(fmt.Sprintf("solved challenge in %s", elapsed.String()))
+		submissionUrl = fmt.Sprintf(
+			"%s.within.website/x/cmd/anubis/api/pass-challenge?response=%s&nonce=%d&redir=%s&elapsedTime=%d",
+			s.URL,
+			result.Hash,
+			result.Nonce,
+			s.URL,
+			elapsed.Milliseconds(),
+		)
+	} else {
+		pensive, exists := doc.Find("#image").Attr("src")
+		if !exists {
+			return errors.New("pensive image not found")
+		}
+		log.Debug().Str("pensive", pensive).Msg("found pensive image")
 
-	happy, exists := doc.Find("img[style='display:none;']").Attr("src")
-	if !exists {
-		return errors.New("happy image not found")
-	}
-	log.Debug().Str("happy", happy).Msg("found happy image")
+		happy, exists := doc.Find("img[style='display:none;']").Attr("src")
+		if !exists {
+			return errors.New("happy image not found")
+		}
+		log.Debug().Str("happy", happy).Msg("found happy image")
 
-	scriptPath, exists := doc.Find("script[type='module']").Attr("src")
-	if !exists {
-		return errors.New("script not found")
-	}
-	log.Debug().Str("script", scriptPath).Msg("found script")
+		scriptPath, exists := doc.Find("script[type='module']").Attr("src")
+		if !exists {
+			return errors.New("script not found")
+		}
+		log.Debug().Str("script", scriptPath).Msg("found script")
 
-	// Fetch the script source code.
-	scriptUrl := s.URL + strings.TrimLeft(scriptPath, "/")
-	req, err = http.NewRequest(http.MethodGet, scriptUrl, nil)
-	if err != nil {
-		return err
-	}
-	req.Header = s.buildHeaders()
-	res, err = s.client.Do(req)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != http.StatusOK {
-		return errors.New("unexpected status code while fetching script source: " + res.Status)
-	}
-	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
+		// Fetch the script source code.
+		scriptUrl := s.URL + strings.TrimLeft(scriptPath, "/")
+		req, err = http.NewRequest(http.MethodGet, scriptUrl, nil)
+		if err != nil {
+			return err
+		}
+		req.Header = s.buildHeaders()
+		res, err = s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		if res.StatusCode != http.StatusOK {
+			return errors.New("unexpected status code while fetching script source: " + res.Status)
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+
+		// Solve the POW challenge.
+		log.Info().Msg("solving challenge...")
+		start := time.Now()
+		submissionUrl, err = SolveChallenge(s.URL, string(body), version, challengeJson)
+		if err != nil {
+			return fmt.Errorf("failed to solve challenge: %w", err)
+		}
+		end := time.Now()
+		log.Info().Msg(fmt.Sprintf("solved challenge in %s", end.Sub(start)))
 	}
 
-	// Solve the POW challenge.
-	log.Info().Msg("solving challenge...")
-	start := time.Now()
-	submissionUrl, err := SolveChallenge(s.URL, string(body), version, challengeJson)
-	if err != nil {
-		return fmt.Errorf("failed to solve challenge: %w", err)
-	}
-	end := time.Now()
-	log.Info().Str("url", submissionUrl).Msg(fmt.Sprintf("solved challenge in %s", end.Sub(start)))
+	log.Info().Str("url", submissionUrl).Msg("got challenge submission URL")
 
 	// Submit the solution and retrieve the cookie.
 	req, err = http.NewRequest(http.MethodGet, submissionUrl, nil)
