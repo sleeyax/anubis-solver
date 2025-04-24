@@ -31,3 +31,6 @@ To make this a little more interesting for myself, I set some goals for this pro
 - Use the [V8](https://v8.dev/) engine directly to execute the JavaScript code dynamically. No browser automation. No hardcoding.
 - Make (almost) no changes to the original challenge JS bundle.
 - Speed.
+
+## License
+[MIT](./LICENSE)
